@@ -1,0 +1,11 @@
+{
+    "market": "마켓 티커 ex)KRW-BTC", 
+    "candle_date_time_utc": "기준 datetime yyyy-mm-dd'T'hh:mm:ss ", 
+    "opening_price": "시가", 
+    "high_price": "고가", 
+    "low_price": "저가", 
+    "trade_price": "종가", 
+    "candle_acc_trade_price": "거래 금액", 
+    "candle_acc_trade_volume": "거래량", 
+    "change_rate": "변동율 (*100 해야함)"
+}
