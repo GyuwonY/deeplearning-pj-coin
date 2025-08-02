@@ -2,37 +2,29 @@ from transformers import PatchTSTConfig, PatchTSTForPrediction
 
 import config
 
-def create_patchtst_model(num_static_categorical_features):
-    """
-    Creates and returns a PatchTSTForPrediction model with the specified configuration.
 
-    Args:
-        num_static_categorical_features (int): The number of unique static categorical features (e.g., coin IDs).
-
-    Returns:
-        PatchTSTForPrediction: The configured PatchTST model.
-    """
+def create_patchtst_model(num_coins: int):
     model_config = PatchTSTConfig(
-        # Data related
-        # Add 1 to input channels for the static coin_id feature
-        num_input_channels=len(config.FEATURE_COLS) + 1,
+        # --- Time series properties ---
+        num_input_channels=len(config.FEATURE_COLS),
         context_length=config.WINDOW_SIZE,
-        prediction_length=len(config.PREDICTION_HORIZONS),
-        
-        # Patching
+        prediction_length=max(config.PREDICTION_HORIZONS),
+        # --- Static features ---
+        num_static_categorical_features=1,  # We have one static feature: coin_id
+        cardinality=[num_coins],  # The number of unique values for the static feature
+        # --- Patching ---
         patch_length=10,
         stride=10,
-        
-        # Transformer architecture
+        # --- Transformer architecture ---
         d_model=128,
         num_attention_heads=4,
-        num_hidden_layers=3,
+        num_hidden_layers=4,
         ffn_dim=256,
         dropout=0.1,
-        
-        # Loss and Distribution for Probabilistic Forecasting
+        # --- Loss and Distribution for Probabilistic Forecasting ---
         loss="nll",
-        distribution_output="student_t"
+        distribution_output="student_t",
+        num_output_channels=1
     )
 
     model = PatchTSTForPrediction(model_config)
