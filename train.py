@@ -183,14 +183,14 @@ def main():
 
     # 3. Create Sequences
     prediction_length = max(config.PREDICTION_HORIZONS)
-    X_train_seq, y_train_seq, train_coin_ids_seq = dataset.create_sequences(
+    X_train_seq, y_train_seq = dataset.create_sequences(
         X_train_scaled,
         y_train_scaled,
         train_df["coin_id"].values,
         config.WINDOW_SIZE,
         prediction_length,
     )
-    X_val_seq, y_val_seq, val_coin_ids_seq = dataset.create_sequences(
+    X_val_seq, y_val_seq = dataset.create_sequences(
         X_val_scaled,
         y_val_scaled,
         val_df["coin_id"].values,
@@ -200,13 +200,12 @@ def main():
 
     # 4. Create Datasets
     train_dataset = dataset.TimeSeriesDataset(
-        X_train_seq, y_train_seq, train_coin_ids_seq
+        X_train_seq, y_train_seq
     )
-    val_dataset = dataset.TimeSeriesDataset(X_val_seq, y_val_seq, val_coin_ids_seq)
+    val_dataset = dataset.TimeSeriesDataset(X_val_seq, y_val_seq)
 
     # 5. Create Model
-    num_coins = filtered_df["coin_id"].nunique()
-    patchtst_model = model_utils.create_patchtst_model(num_coins)
+    patchtst_model = model_utils.create_patchtst_model()
 
     training_args = TrainingArguments(
         output_dir=config.OUTPUT_DIR,
@@ -232,7 +231,7 @@ def main():
     )
 
     early_stopping_callback = EarlyStoppingCallback(
-        early_stopping_patience=5, early_stopping_threshold=0.001
+        early_stopping_patience=15, early_stopping_threshold=0.0005
     )
 
     trainer = CustomTrainer(

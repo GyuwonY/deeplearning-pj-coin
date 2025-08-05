@@ -208,3 +208,6 @@ __marimo__/
 
 daycandle/
 patchtst_logs/
+tmp_trainer/
+patchtst_results/
+patchtst_results/best_model

@@ -27,12 +27,17 @@ def load_and_process_data(directory):
         volume = df['candle_acc_trade_volume'].values
 
         df['EMA_12'] = talib.EMA(close, timeperiod=12)
+        df['SMA_20'] = talib.SMA(close, timeperiod=20)
         df['SMA_60'] = talib.SMA(close, timeperiod=60)
         df['ADX'] = talib.ADX(high, low, close, timeperiod=14)
         df['OBV'] = talib.OBV(close, volume)
         df['RSI'] = talib.RSI(close, timeperiod=14)
         df['MFI'] = talib.MFI(high, low, close, volume, timeperiod=14)
         df['CCI'] = talib.CCI(high, low, close, timeperiod=14)
+        df['STOCH_K'], df['STOCH_D'] = talib.STOCH(high, low, close, fastk_period=5, slowk_period=3, slowd_period=3)
+        df['ROC'] = talib.ROC(close, timeperiod=10)
+        df['ATR'] = talib.ATR(high, low, close, timeperiod=14)
+        df = add_cmf(df)
         
 
         macd, macdsignal, macdhist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
@@ -56,6 +61,24 @@ def load_and_process_data(directory):
     processed_df.sort_values(by=['coin_symbol', processed_df.index.name], inplace=True)
     
     return processed_df
+
+def add_cmf(df, period=20):
+    """
+    Chaikin Money Flow (CMF)를 계산하여 데이터프레임에 추가합니다.
+    """
+    close_price = df['trade_price']
+    low_price = df['low_price']
+    high_price = df['high_price']
+    volume = df['candle_acc_trade_volume']
+
+    mfm = ((close_price - low_price) - (high_price - close_price)) / (high_price - low_price)
+    mfm = mfm.fillna(0)
+
+    mfv = mfm * volume
+    
+    cmf = mfv.rolling(window=period).sum() / volume.rolling(window=period).sum()
+    df['CMF'] = cmf
+    return df
 
 def filter_and_split_data(df):
     min_sequence_length = config.WINDOW_SIZE + max(config.PREDICTION_HORIZONS)

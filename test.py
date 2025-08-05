@@ -94,12 +94,12 @@ def main():
     y_test_scaled = target_scaler.transform(test_df[[config.TARGET_COL]])
 
     prediction_length = max(config.PREDICTION_HORIZONS)
-    X_test_seq, y_test_seq, test_coin_ids_seq = dataset.create_sequences(
+    X_test_seq, y_test_seq = dataset.create_sequences(
         X_test_scaled, y_test_scaled, test_df["coin_id"].values,
         config.WINDOW_SIZE, prediction_length,
     )
 
-    test_dataset = dataset.TimeSeriesDataset(X_test_seq, y_test_seq, test_coin_ids_seq)
+    test_dataset = dataset.TimeSeriesDataset(X_test_seq, y_test_seq)
 
     print("Loading best model...")
     final_model_path = f"{config.OUTPUT_DIR}/best_model"

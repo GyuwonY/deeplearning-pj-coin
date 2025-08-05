@@ -2,64 +2,47 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-import config
+class TimeSeriesDataset(Dataset):
+    def __init__(self, features_data, target_data):
+        self.features = features_data
+        self.targets = target_data
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        # Convert numpy arrays to float32 tensors, which is expected by the trainer for fp16 training.
+        return {
+            "past_values": torch.tensor(self.features[idx], dtype=torch.float32),
+            "future_values": torch.tensor(self.targets[idx], dtype=torch.float32),
+        }
 
 
 def create_sequences(
-    features_data: np.ndarray,
-    target_data: np.ndarray,
+    features_np_array: np.ndarray,
+    target_np_array: np.ndarray,
     coin_ids_series: np.ndarray,
     window_size: int,
     prediction_length: int,
 ):
-    """
-    Create sequences of past features, future targets, and corresponding coin IDs.
-    """
-    X_seq, y_seq, coin_ids_seq = [], [], []
-
+    X_seq, y_seq = [], []
     unique_coin_ids = np.unique(coin_ids_series)
-
     for symbol_id in unique_coin_ids:
-        # Get all data for the current coin
         coin_mask = coin_ids_series == symbol_id
-        features_for_symbol = features_data[coin_mask]
-        target_for_symbol = target_data[coin_mask]
+        features_for_symbol = features_np_array[coin_mask]
+        target_for_symbol = target_np_array[coin_mask]
 
+        # Skip if there's not enough data for a full sequence for this coin
         if len(features_for_symbol) < window_size + prediction_length:
             continue
 
         for i in range(len(features_for_symbol) - window_size - prediction_length + 1):
-            # Past values: window_size sequence of features
             X_seq.append(features_for_symbol[i : i + window_size])
-
-            # Future values: prediction_length sequence of the target variable
             y_seq.append(
-                target_for_symbol[i + window_size : i + window_size + prediction_length]
+                target_for_symbol[
+                    i + window_size : i + window_size + prediction_length
+                ]
             )
 
-            # Static feature: coin_id
-            coin_ids_seq.append(symbol_id)
+    return np.array(X_seq), np.array(y_seq)
 
-    return np.array(X_seq), np.array(y_seq), np.array(coin_ids_seq)
-
-
-class TimeSeriesDataset(Dataset):
-    """
-    Custom PyTorch Dataset for time series data, compatible with Hugging Face's PatchTST.
-    """
-
-    def __init__(self, X_data, y_data, id_data):
-        self.past_values = torch.tensor(X_data, dtype=torch.float32)
-        self.future_values = torch.tensor(y_data, dtype=torch.float32)
-        # Static features are expected to be categorical
-        self.static_categorical_features = torch.tensor(id_data, dtype=torch.long)
-
-    def __len__(self):
-        return len(self.past_values)
-
-    def __getitem__(self, idx):
-        return {
-            "past_values": self.past_values[idx],
-            "future_values": self.future_values[idx],
-            "static_categorical_features": self.static_categorical_features[idx],
-        }
