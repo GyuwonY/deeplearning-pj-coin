@@ -1,10 +1,11 @@
 import os
 import joblib
 import numpy as np
+import pandas as pd
 import torch
 import torch.distributions as dist
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 from transformers import (
     EarlyStoppingCallback,
     Trainer,
@@ -21,36 +22,36 @@ from train import CustomTrainer, compute_metrics
 
 
 def objective(trial: optuna.Trial):
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
-    d_model = trial.suggest_categorical("d_model", [32, 64, 128, 256])
+    learning_rate = trial.suggest_float("learning_rate", 1e-7, 1e-2, log=True)
+    d_model = trial.suggest_categorical("d_model", [512, 1024])
     num_mixer_layers = trial.suggest_int("num_mixer_layers", 2, 6)
     expansion_factor = trial.suggest_categorical("expansion_factor", [1, 2, 4])
     patch_len = trial.suggest_categorical("patch_len", [5, 6, 10, 12])
-    patch_stride = trial.suggest_categorical("patch_stride", [patch_len, patch_len // 2])
+    stride_strategy = trial.suggest_categorical("stride_strategy", ["full", "half"])
+    patch_stride = patch_len if stride_strategy == "full" else patch_len // 2
     dropout = trial.suggest_float("dropout", 0.1, 0.5, step=0.1)
     batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
 
 
-    processed_df = data_utils.load_and_process_data(config.DAYCANDLE_DIR)
-    train_df, val_df, _, _ = data_utils.filter_and_split_data(processed_df)
+    # --- Data Preparation for Tuning ---
+    train_df, val_df = data_utils.prepare_tuning_data(max_rows_per_coin=1500)
 
-    feature_scaler = StandardScaler()
-    target_scaler = StandardScaler()
+    if train_df is None or val_df is None:
+        raise optuna.exceptions.TrialPruned("No coins with sufficient data for this trial.")
 
-    X_train_scaled = feature_scaler.fit_transform(train_df[config.FEATURE_COLS])
-    y_train_scaled = target_scaler.fit_transform(train_df[[config.TARGET_COL]])
-    X_val_scaled = feature_scaler.transform(val_df[config.FEATURE_COLS])
-    y_val_scaled = target_scaler.transform(val_df[[config.TARGET_COL]])
+    # The data is already scaled. We just need the column values.
+    X_train_scaled = train_df[config.FEATURE_COLS].to_numpy()
+    X_val_scaled = val_df[config.FEATURE_COLS].to_numpy()
 
     prediction_length = max(config.PREDICTION_HORIZONS)
     X_train_seq, y_train_seq = dataset.create_sequences(
-        X_train_scaled, y_train_scaled, train_df["coin_id"].values,
-        config.WINDOW_SIZE, prediction_length
+        X_train_scaled, train_df[config.TARGET_COL].to_numpy(),
+        train_df["coin_id"].to_numpy(), config.WINDOW_SIZE, prediction_length
     )
     X_val_seq, y_val_seq = dataset.create_sequences(
-        X_val_scaled, y_val_scaled, val_df["coin_id"].values,
-        config.WINDOW_SIZE, prediction_length
+        X_val_scaled, val_df[config.TARGET_COL].to_numpy(),
+        val_df["coin_id"].to_numpy(), config.WINDOW_SIZE, prediction_length
     )
 
     train_dataset = dataset.TimeSeriesDataset(X_train_seq, y_train_seq)
@@ -58,14 +59,16 @@ def objective(trial: optuna.Trial):
 
     model_config = PatchTSMixerConfig(
         num_input_channels=len(config.FEATURE_COLS),
+        prediction_channel_indices=[config.FEATURE_COLS.index(config.TARGET_COL)],
         context_length=config.WINDOW_SIZE,
         prediction_length=prediction_length,
-        patch_length=patch_len,
-        patch_stride=patch_stride,
+        patch_length=6,
+        patch_stride=6,
         d_model=d_model,
-        num_mixer_layers=num_mixer_layers,
-        expansion_factor=expansion_factor,
-        dropout=dropout,
+        num_layers=8,
+        expansion_factor=1,
+        dropout=0.2,
+        num_targets=3,
         loss="nll",
         distribution_output="student_t",
     )
@@ -76,8 +79,8 @@ def objective(trial: optuna.Trial):
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=config.NUM_TRAIN_EPOCHS,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
+        per_device_train_batch_size=256,
+        per_device_eval_batch_size=256,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
         eval_strategy="epoch",
@@ -93,6 +96,7 @@ def objective(trial: optuna.Trial):
         warmup_steps=100,
         optim="adamw_torch",
         lr_scheduler_type="cosine_with_restarts",
+        seed=config.SEED,
     )
 
     early_stopping_callback = EarlyStoppingCallback(
@@ -116,7 +120,7 @@ def objective(trial: optuna.Trial):
         print(f"Trial pruned due to an error: {e}")
         raise optuna.exceptions.TrialPruned(f"Pruned due to error: {e}")
     
-    return eval_results["nll"]
+    return eval_results["eval_nll"]
 
 
 def run_tuning(n_trials=50):

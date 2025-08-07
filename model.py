@@ -9,6 +9,7 @@ def create_patchtst_model():
         num_input_channels=len(config.FEATURE_COLS),
         context_length=config.WINDOW_SIZE,
         prediction_length=max(config.PREDICTION_HORIZONS),
+        prediction_channel_indices=[config.FEATURE_COLS.index(config.TARGET_COL)],
         # --- Static features ---
         num_static_categorical_features=0,  # No static features
         # --- Patching ---

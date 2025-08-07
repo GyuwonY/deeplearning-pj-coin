@@ -34,6 +34,7 @@ WINDOW_SIZE = 60
 PREDICTION_HORIZONS = [1, 3, 7]
 
 # --- Training Configuration ---
+SEED = 42
 BATCH_SIZE = 32
 NUM_TRAIN_EPOCHS = 100
 LEARNING_RATE = 1e-3

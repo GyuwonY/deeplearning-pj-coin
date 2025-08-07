@@ -1,0 +1,1 @@
+{'learning_rate': 8.117069722568844e-05, 'd_model': 256, 'num_mixer_layers': 6, 'expansion_factor': 1, 'patch_len': 6, 'stride_strategy': 'full', 'dropout': 0.2, 'batch_size': 256, 'weight_decay': 9.379245067144904e-05}
